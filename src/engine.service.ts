@@ -8,6 +8,7 @@ import { GammaClient } from './polymarket/clients/gamma.client';
 import { ClobClient } from './polymarket/clients/clob.client';
 import { RiskManager } from './risk/risk-manager.service';
 import { ExecutionGateway } from './execution/execution-gateway.service';
+import { PnlReconciler } from './execution/pnl-reconciler.service';
 import {
   IStrategy, MarketSnapshot, OrderBook, OrderBookLevel, Fill,
   StrategyContext, StrategyConfig,
@@ -31,8 +32,11 @@ export class EngineService implements OnModuleInit {
   private readonly reconcileIntervalMs = 2000;
 
   constructor(
-    private gamma: GammaClient, private clob: ClobClient,
-    private risk: RiskManager, private execution: ExecutionGateway,
+    private gamma: GammaClient,
+    private clob: ClobClient,
+    private risk: RiskManager,
+    private execution: ExecutionGateway,
+    private pnlReconciler: PnlReconciler,
   ) {}
 
   registerStrategy(name: string, strategy: IStrategy): void {
@@ -210,8 +214,31 @@ export class EngineService implements OnModuleInit {
   }
 
   @Cron('0 0 * * *')
-  dailyReset(): void { this.risk.resetDaily(); }
+  async dailyReset(): Promise<void> {
+    // Reconcile PnL against on-chain positions before resetting the daily counter.
+    try {
+      await this.pnlReconciler.reconcileDaily(this.activeMarkets.values());
+    } catch (e: any) {
+      this.logger.error(`Daily PnL reconciliation failed: ${e.message}`);
+    }
+    this.risk.resetDaily();
+  }
 
   @Cron(CronExpression.EVERY_30_MINUTES)
-  async rescan(): Promise<void> { await this.scanMarkets(); }
+  async rescan(): Promise<void> {
+    await this.scanMarkets();
+    // Rebalance inventory (CTF split/merge) for active markets after each rescan.
+    await this.rebalanceActiveMarkets();
+  }
+
+  private async rebalanceActiveMarkets(): Promise<void> {
+    const markets = [...this.activeMarkets.values()];
+    for (const market of markets) {
+      try {
+        await this.execution.rebalanceInventory(market);
+      } catch (e: any) {
+        this.logger.warn(`Rebalance failed for ${market.slug}: ${e.message}`);
+      }
+    }
+  }
 }
