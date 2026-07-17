@@ -10,7 +10,7 @@ import {
 
 export function makeBook(
   bids: Array<[number, number]>,
-  asks: Array<[number, number]>,
+  asks: Array<[number, number]> = [],
   tickSize = 0.01,
 ): OrderBook {
   const b: OrderBookLevel[] = bids.map(([price, size]) => ({ price, size }))

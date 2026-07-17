@@ -56,14 +56,15 @@ describe('OrderBook helpers', () => {
   });
 
   describe('microprice', () => {
-    it('weights toward the side with more depth', () => {
-      // Bid side has 10x the depth of ask side → microprice shifts toward bid price
+    it('weights toward the opposite side with more depth (buying pressure pulls up)', () => {
+      // Bid side has 10x the depth of ask side → heavy bid volume gives more weight
+      // to the ask price, pulling microprice above mid.
+      // microprice = (bestBid * askVol + bestAsk * bidVol) / total
+      //            = (0.48*100 + 0.52*1000) / 1100 ≈ 0.5164
       const book = makeBook([[0.48, 1000]], [[0.52, 100]]);
       const mp = book.microprice();
-      // microprice = (bidPrice * askVol + askPrice * bidVol) / total
-      //            = (0.48*100 + 0.52*1000) / 1100 ≈ 0.4836
-      expect(mp).toBeLessThan(0.5);
-      expect(mp).toBeGreaterThan(0.48);
+      expect(mp).toBeGreaterThan(0.5);
+      expect(mp).toBeLessThan(0.52);
     });
 
     it('returns best bid when ask side is empty', () => {
@@ -79,7 +80,7 @@ describe('OrderBook helpers', () => {
 
   describe('depthAtLevel', () => {
     it('sums the top N levels on the bid side', () => {
-      const book = makeBook([[0.49, 100], [0.48, 200], [0.47, 300]]);
+      const book = makeBook([[0.49, 100], [0.48, 200], [0.47, 300]], []);
       expect(book.depthAtLevel('bid', 2)).toBe(300); // 100 + 200
     });
 

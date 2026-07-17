@@ -75,17 +75,26 @@ describe('RewardFarmingStrategy.compute', () => {
     }
   });
 
-  it('reduces size when directional inventory is large', () => {
-    const flat = strategy.compute(makeCtx(), makeConfig({ baseSizeUsdc: 1000 }));
-    const skewed = strategy.compute(
+  it('reduces size when inventory utilization exceeds the soft fraction', () => {
+    // Two configs identical except qSoftFrac. With yesShares=100, qMaxUsdc=200,
+    // util = 0.5. qSoftFrac=0.99 → no reduction; qSoftFrac=0.01 → 50% reduction.
+    // Since qSoftFrac doesn't affect reservation price, rewardSize is identical;
+    // only the adjustment factor differs.
+    const noAdjust = strategy.compute(
       makeCtx({
-        inventory: { yesShares: 150, noShares: 0, netUsdc: 0, realizedPnl: 0 },
+        inventory: { yesShares: 100, noShares: 0, netUsdc: 0, realizedPnl: 0 },
       }),
-      makeConfig({ baseSizeUsdc: 1000, qMaxUsdc: 200 }),
+      makeConfig({ baseSizeUsdc: 100, qMaxUsdc: 200, qSoftFrac: 0.99 }),
     );
-    const flatYesSize = flat.quotes.find(q => q.side === 'BUY_YES')?.size ?? 0;
-    const skewedYesSize = skewed.quotes.find(q => q.side === 'BUY_YES')?.size ?? 0;
-    expect(skewedYesSize).toBeLessThanOrEqual(flatYesSize);
+    const withAdjust = strategy.compute(
+      makeCtx({
+        inventory: { yesShares: 100, noShares: 0, netUsdc: 0, realizedPnl: 0 },
+      }),
+      makeConfig({ baseSizeUsdc: 100, qMaxUsdc: 200, qSoftFrac: 0.01 }),
+    );
+    const noAdjustYes = noAdjust.quotes.find(q => q.side === 'BUY_YES')?.size ?? 0;
+    const withAdjustYes = withAdjust.quotes.find(q => q.side === 'BUY_YES')?.size ?? 0;
+    expect(withAdjustYes).toBeLessThan(noAdjustYes);
   });
 
   it('all quotes are postOnly (maker-only)', () => {
