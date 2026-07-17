@@ -3,7 +3,7 @@
  */
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import WebSocket from 'ws';
+import * as WebSocket from 'ws';
 import { ethers } from 'ethers';
 import {
   ClobClient as PolyClobClient,
@@ -133,9 +133,11 @@ export class ClobClient implements OnModuleInit {
   }
 
   subscribeOrderBook(tokenId: string, onMessage: (data: any) => void, onOpen?: () => void): WebSocket {
-    const ws = new WebSocket(this.wsHost);
+    // Polymarket CLOB market-data WS lives at /ws/market (the bare /ws root returns 404).
+    const url = this.wsHost.endsWith('/ws') ? `${this.wsHost}/market` : this.wsHost;
+    const ws = new WebSocket(url);
     ws.on('open', () => {
-      ws.send(JSON.stringify({ type: 'Subscribe', channels: ['market', 'user'], assets_ids: [tokenId] }));
+      ws.send(JSON.stringify({ type: 'Subscribe', channels: ['market'], assets_ids: [tokenId] }));
       onOpen?.();
     });
     ws.on('message', (data: Buffer) => {

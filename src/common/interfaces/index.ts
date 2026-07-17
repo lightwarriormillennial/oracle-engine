@@ -91,3 +91,6 @@ export function computeTakerFee(category: string, price: number, shares: number)
   const entry = FEE_MATRIX[category] || FEE_MATRIX.other;
   return shares * entry.takerFee * price * (1 - price);
 }
+
+/** DI token for the multi-provider array of registered strategies. */
+export const STRATEGIES = Symbol('STRATEGIES');

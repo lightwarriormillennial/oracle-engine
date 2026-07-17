@@ -2,7 +2,7 @@
  * EngineService — the main trading loop.
  * WS event → OrderBook → Strategy.compute() → RiskManager → ExecutionGateway
  */
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { GammaClient } from './polymarket/clients/gamma.client';
 import { ClobClient } from './polymarket/clients/clob.client';
@@ -11,7 +11,7 @@ import { ExecutionGateway } from './execution/execution-gateway.service';
 import { PnlReconciler } from './execution/pnl-reconciler.service';
 import {
   IStrategy, MarketSnapshot, OrderBook, OrderBookLevel, Fill,
-  StrategyContext, StrategyConfig,
+  StrategyContext, StrategyConfig, STRATEGIES,
 } from './common/interfaces';
 
 interface BookState {
@@ -37,6 +37,7 @@ export class EngineService implements OnModuleInit {
     private risk: RiskManager,
     private execution: ExecutionGateway,
     private pnlReconciler: PnlReconciler,
+    @Inject(STRATEGIES) private injectedStrategies: IStrategy[],
   ) {}
 
   registerStrategy(name: string, strategy: IStrategy): void {
@@ -49,6 +50,13 @@ export class EngineService implements OnModuleInit {
     this.logger.log('  Oracle Engine — initializing');
     this.logger.log(`  Mode: ${process.env.ENGINE_MODE || 'paper'}`);
     this.logger.log('═══════════════════════════════════════════');
+    // Auto-register injected strategies (multi-provider STRATEGIES token).
+    for (const strategy of this.injectedStrategies ?? []) {
+      this.registerStrategy(strategy.name, strategy);
+    }
+    if (this.strategies.size === 0) {
+      this.logger.warn('No strategies registered — engine will not monitor markets');
+    }
     await this.scanMarkets();
     await this.start();
   }
