@@ -85,7 +85,7 @@ export class CtfClient {
     this.rpcUrl =
       this.config.get<string>('POLY_RPC_URL') ||
       this.config.get<string>('RPC_URL') ||
-      'https://polygon-rpc.com';
+      'https://polygon-bor-rpc.publicnode.com';
     this.proxyAddress = this.config.get<string>('POLY_PROXY_ADDRESS');
     const privateKey = this.config.get<string>('POLY_PRIVATE_KEY');
     this.enabled = Boolean(privateKey && this.proxyAddress);

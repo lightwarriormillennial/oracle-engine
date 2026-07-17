@@ -9,6 +9,8 @@ import { ClobClient } from './polymarket/clients/clob.client';
 import { RiskManager } from './risk/risk-manager.service';
 import { ExecutionGateway } from './execution/execution-gateway.service';
 import { PnlReconciler } from './execution/pnl-reconciler.service';
+import { BacktestService } from './signal-engine/backtest.service';
+import { PriceFeedAggregator } from './signal-engine/feeds/price-feed-aggregator';
 import {
   IStrategy, MarketSnapshot, OrderBook, OrderBookLevel, Fill,
   StrategyContext, StrategyConfig, STRATEGIES,
@@ -37,6 +39,8 @@ export class EngineService implements OnModuleInit {
     private risk: RiskManager,
     private execution: ExecutionGateway,
     private pnlReconciler: PnlReconciler,
+    private backtest: BacktestService,
+    private feedAggregator: PriceFeedAggregator,
     @Inject(STRATEGIES) private injectedStrategies: IStrategy[],
   ) {}
 
@@ -57,6 +61,8 @@ export class EngineService implements OnModuleInit {
     if (this.strategies.size === 0) {
       this.logger.warn('No strategies registered — engine will not monitor markets');
     }
+    // Start collecting Tier-2 signal ticks for backtest (Phase 3).
+    this.backtest.startRecording();
     await this.scanMarkets();
     await this.start();
   }
@@ -230,6 +236,20 @@ export class EngineService implements OnModuleInit {
       this.logger.error(`Daily PnL reconciliation failed: ${e.message}`);
     }
     this.risk.resetDaily();
+    // Run the daily Tier-2 backtest sweep: does the edge survive net of fees?
+    try {
+      const results = await this.backtest.sweepParameters();
+      if (results.length > 0) {
+        const best = results[0];
+        this.logger.log(
+          `Backtest sweep: ${results.length} tradeable configs — best netExpectancy=${best.netExpectancy.toFixed(5)} winRate=${(best.winRate * 100).toFixed(1)}% signals=${best.totalSignals}`,
+        );
+      } else {
+        this.logger.warn('Backtest sweep: no tradeable configurations found (insufficient data or no net edge)');
+      }
+    } catch (e: any) {
+      this.logger.error(`Backtest sweep failed: ${e.message}`);
+    }
   }
 
   @Cron(CronExpression.EVERY_30_MINUTES)
